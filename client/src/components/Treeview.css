@@ -1,0 +1,36 @@
+.tree-node {
+  display: flex;
+  align-items: center;
+  padding: 5px;
+  transition: background-color 0.3s;
+  border-radius: 4px;
+}
+
+.tree-node:hover {
+  background-color: #f0f0f0;
+  cursor: pointer;
+}
+
+.toggle-icon {
+  margin-right: 10px;
+  cursor: pointer;
+  color: #888;
+  user-select: none;
+}
+
+.toggle-icon:hover {
+  color: #333;
+}
+
+.node-text {
+  font-size: 14px;
+  color: #333;
+}
+
+.tree-node {
+  margin-left: 10px;
+}
+
+.tree-node:active {
+  background-color: #e0e0e0;
+}
