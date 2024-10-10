@@ -1,4 +1,5 @@
-import { ReactElement, useState } from "react";
+import { ReactElement, useEffect, useState } from "react";
+import axios from "axios";
 import {
   Tree,
   getBackendOptions,
@@ -6,18 +7,35 @@ import {
 } from "@minoru/react-dnd-treeview";
 import { DndProvider } from "react-dnd";
 import { ArrowRight, ArrowDropDown } from "@mui/icons-material";
-import initialData from "./sample-default.json";
-import "./Treeview.css"; // Importing external styles
+import "./Treeview.css";
+
+const serverURI: String = "http://localhost:3000/api";
 
 const Treeview: React.FC = (): ReactElement => {
-  const [treeData, setTreeData] = useState<any[]>(initialData);
-
+  const [treeData, setTreeData] = useState<any[]>([]);
   const [nodeInputs, setNodeInputs] = useState<{ [key: number]: string }>({});
-
-  // State to track which node's input field is visible
   const [visibleInputNode, setVisibleInputNode] = useState<number | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
 
-  const handleDrop = (newTreeData: any[]) => {
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios.get(`${serverURI}/treeviews`);
+        setTreeData(response.data);
+      } catch (error) {
+        console.error("Error fetching tree data:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const handleDrop = (
+    newTreeData: any[],
+    dragSourceId: Number,
+    dropTargetId: Number
+  ) => {
+    axios.put(`${serverURI}/treeviews/${dragSourceId}/move`, { newParentId: dropTargetId });
     setTreeData(newTreeData);
   };
 
@@ -40,11 +58,15 @@ const Treeview: React.FC = (): ReactElement => {
     }
 
     const newItem = {
-      id: Date.now(),
+      id: undefined,
       parent: parentId,
       droppable: false,
       text: nodeInputs[parentId],
     };
+
+    axios
+      .post(`${serverURI}/treeviews`, { text: nodeInputs[parentId], parentId })
+      .then((response) => (newItem.id = response.data.id));
 
     const updatedTree = [...treeData, newItem];
     setTreeData(updatedTree);
@@ -55,6 +77,33 @@ const Treeview: React.FC = (): ReactElement => {
     });
 
     setVisibleInputNode(null);
+  };
+
+  const handleEditItem = (nodeId: number) => {
+    setEditingNodeId(nodeId);
+    setNodeInputs({
+      ...nodeInputs,
+      [nodeId]: treeData.find((node) => node.id === nodeId)?.text || "",
+    });
+  };
+
+  const handleSaveEdit = (nodeId: number) => {
+    const updatedNodeText = nodeInputs[nodeId];
+    const updatedTree = treeData.map((node) =>
+      node.id === nodeId ? { ...node, text: updatedNodeText } : node
+    );
+
+    axios.put(`${serverURI}/treeviews/${nodeId}`, { text: updatedNodeText });
+
+    setTreeData(updatedTree);
+    setEditingNodeId(null);
+  };
+
+  const handleDeleteItem = (nodeId: number) => {
+    const updatedTree = treeData.filter((node) => node.id !== nodeId);
+    setTreeData(updatedTree);
+
+    axios.delete(`${serverURI}/treeviews/${nodeId}`);
   };
 
   const toggleInputVisibility = (nodeId: number) => {
@@ -70,7 +119,29 @@ const Treeview: React.FC = (): ReactElement => {
               {node.isOpen ? <ArrowDropDown /> : <ArrowRight />}
             </span>
           )}
-          <span className="node-text">{node.text}</span>
+          {editingNodeId === node.id ? (
+            <>
+              <input
+                type="text"
+                value={nodeInputs[node.id] || ""}
+                onChange={(e) => handleNodeInputChange(node.id, e.target.value)}
+                placeholder={`Enter text for node ${node.id}`}
+                className="node-input"
+              />
+              <button onClick={() => handleSaveEdit(node.id)}>Save</button>
+              <button onClick={() => setEditingNodeId(null)}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <span className="node-text">{node.text}</span>
+              <button onClick={() => handleEditItem(node.id)}>Edit</button>
+              {node.parent !== 0 && (
+                <button onClick={() => handleDeleteItem(node.id)}>
+                  Delete
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         {node.droppable && node.isOpen && (
@@ -93,7 +164,7 @@ const Treeview: React.FC = (): ReactElement => {
                   onChange={(e) =>
                     handleNodeInputChange(node.id, e.target.value)
                   }
-                  placeholder={`Enter text for node ${node.id}`}
+                  placeholder={`Enter text for new item`}
                   className="node-input"
                 />
                 <button onClick={() => handleAddItem(node.id)}>Add</button>
@@ -119,25 +190,21 @@ const Treeview: React.FC = (): ReactElement => {
         tree={treeData}
         rootId={0}
         onDrop={(newTreeData, { dragSource, dropTargetId }) => {
-          // Ensure the dragged node is not dropped on itself
           if (dragSource.id === dropTargetId) return;
 
           const dropTargetNodeIndex = treeData.findIndex(
             (node) => node.id === dropTargetId
           );
 
-          // If the drop target node exists
           if (dropTargetNodeIndex !== -1) {
             const dropTargetNode = treeData[dropTargetNodeIndex];
 
-            // If the node is not droppable, make it droppable upon a drop
             if (!dropTargetNode.droppable) {
               dropTargetNode.droppable = true;
             }
           }
 
-          // Update the tree state
-          handleDrop(newTreeData); // Call the existing handleDrop function
+          handleDrop(newTreeData, dragSource.id, dropTargetId);
         }}
         sort={false}
         insertDroppableFirst={false}
@@ -151,7 +218,6 @@ const Treeview: React.FC = (): ReactElement => {
         }}
         dropTargetOffset={5}
         render={(node, { depth, isOpen, onToggle }) => {
-          // Add isOpen and onToggle props to the node to manage expansion
           const extendedNode = { ...node, isOpen, onToggle };
           return renderTreeWithInputs(extendedNode, depth);
         }}

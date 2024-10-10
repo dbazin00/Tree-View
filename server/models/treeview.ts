@@ -3,7 +3,7 @@ import { DataTypes, Model } from "sequelize";
 
 export class TreeView extends Model {
   public id!: number;
-  public name!: string;
+  public text!: string;
   public parentId!: number | null;
 }
 
@@ -14,7 +14,7 @@ TreeView.init(
       primaryKey: true,
       autoIncrement: true,
     },
-    name: {
+    text: {
       type: DataTypes.STRING,
       allowNull: false,
     },
@@ -40,7 +40,7 @@ const initializeTree = async () => {
   const rootExists = await TreeView.findByPk(1);
 
   if (!rootExists) {
-    await TreeView.create({ name: "Root" });
+    await TreeView.create({ text: "Root" });
   }
 };
 
